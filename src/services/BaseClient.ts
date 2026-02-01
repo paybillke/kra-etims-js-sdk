@@ -82,7 +82,6 @@ export abstract class BaseClient {
       return this.processResponse(response, endpointKey, method, data);
     } catch (error: unknown) {
     if (endpoint.endsWith('/initialize')) {
-      console.log(axiosConfig, error);
     }
       if (axios.isAxiosError(error) && error.response) {
         return this.processResponse(

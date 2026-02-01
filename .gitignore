@@ -22,3 +22,4 @@ run/
 *.un~
 .tsbuildinfo
 .tsbuildinfo.*
+tsconfig.build.tsbuildinfo

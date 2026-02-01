@@ -1,14 +1,55 @@
 {
-	"extends": "@paybilldev/tsconfig",
-	"compilerOptions": {
-		"strict": false,
-		"baseUrl": ".",
-		"rootDir": "src",
-		"outDir": "dist",
-		"declarationDir": "types",
-		"types": ["node"],
-		"noImplicitAny": false,
-	},
-	"include": ["src/**/*.ts"],
-	"exclude": ["node_modules", "dist", "test"]
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "strict": false,
+    "declaration": true,
+    "noEmit": false,
+    "removeComments": false,
+    "lib": [
+      "ESNext",
+      "DOM"
+    ],
+    // Disallow JavaScript files from being imported.
+    "allowJs": false,
+    // Enable node-style module resolution, for things like npm package imports.
+    "moduleResolution": "node",
+    // Enable JSON imports.
+    "resolveJsonModule": true,
+    // Enable stricter transpilation for better output.
+    "isolatedModules": false,
+    // Properly support importing CJS modules in ESM
+    "esModuleInterop": true,
+    // Report an error when importing a file using a casing different from the casing on disk.
+    "forceConsistentCasingInFileNames": true,
+    // Skip typechecking libraries and .d.ts files.
+    "skipLibCheck": true,
+    // Error when a value import is only used as a type.
+    "verbatimModuleSyntax": false,
+    // Report errors for fallthrough cases in switch statements.
+    "noFallthroughCasesInSwitch": true,
+    // Force functions designed to override their parent class to be specified as `override`.
+    "noImplicitOverride": false,
+    // Force functions to specify that they can return `undefined` if a possible code path does not return a value.
+    "noImplicitReturns": false,
+    // Report an error when a variable is declared but never used.
+    "noUnusedLocals": false,
+    // Report an error when a parameter is declared but never used.
+    "noUnusedParameters": false,
+    // Force the usage of the indexed syntax to access fields declared using an index signature.
+    "noUncheckedIndexedAccess": true,
+    // Report an error for unreachable code instead of just a warning.
+    "allowUnreachableCode": false,
+    // Report an error for unused labels instead of just a warning.
+    "allowUnusedLabels": false,
+	"baseUrl": ".",
+	"rootDir": "src",
+	"outDir": "dist",
+	"declarationDir": "types",
+	"types": ["node"],
+	"noImplicitAny": false,
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["node_modules", "dist", "test"]
 }
