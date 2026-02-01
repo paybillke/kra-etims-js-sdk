@@ -1,0 +1,20 @@
+# Ignore source files
+src/
+test/
+
+# Ignore configs
+tsconfig.json
+tsconfig.build.json
+tsconfig.vitest.json
+vitest.config.ts
+
+# Logs & misc
+*.log
+.DS_Store
+coverage/
+.turbo/
+.gitignore
+
+# Ignore build caches
+node_modules/
+dist/**/*.map

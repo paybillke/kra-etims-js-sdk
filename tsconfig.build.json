@@ -1,0 +1,14 @@
+{
+	"extends": "@paybilldev/tsconfig",
+	"compilerOptions": {
+		"strict": false,
+		"baseUrl": ".",
+		"rootDir": "src",
+		"outDir": "dist",
+		"declarationDir": "types",
+		"types": ["node"],
+		"noImplicitAny": false,
+	},
+	"include": ["src/**/*.ts"],
+	"exclude": ["node_modules", "dist", "test"]
+}
