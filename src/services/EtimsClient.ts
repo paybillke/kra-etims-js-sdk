@@ -24,13 +24,13 @@ export class EtimsClient extends BaseClient {
   // =============================
   // INITIALIZATION (POSTMAN-COMPLIANT)
   // =============================
-  async initialize(data: Record<string, unknown>): Promise<unknown> {
+  async selectInitOsdcInfo(data: Record<string, unknown>): Promise<unknown> {
     /**
      * ✔ validates ONLY: tin, bhfId, dvcSrlNo
      * ✔ BaseClient handles auth headers + retries
      */
     const validated = this.validate(data, 'initialization');
-    return this.post('initialize', validated);
+    return this.post('selectInitOsdcInfo', validated);
   }
 
   // =============================

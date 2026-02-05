@@ -25,7 +25,7 @@ export interface KraEtimsConfig {
     production: ApiConfig;
   };
   oscu: OscuConfig;
-  endpoints: Record<string, string>; // e.g., { initialize: '/initialize', ... }
+  endpoints: Record<string, string>; // e.g., { selectInitOsdcInfo: '/selectInitOsdcInfo', ... }
   cache_file?: string;
   http?: {
     timeout?: number; // seconds

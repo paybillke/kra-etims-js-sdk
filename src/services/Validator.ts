@@ -203,7 +203,6 @@ export class Validator {
     if (!schema) {
       throw new Error(`Validation schema '${schemaName}' not defined`);
     }
-
     const { error, value } = schema.validate(data, {
       abortEarly: false,
       convert: true,
@@ -215,6 +214,7 @@ export class Validator {
         'number.min': '{{#label}} must be greater than or equal to {{#limit}}',
       },
     });
+    console.log(error)
 
     if (error) {
       const messages = error.details.map(d => d.message);

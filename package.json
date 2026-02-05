@@ -40,6 +40,8 @@
   "devDependencies": {
     "@types/node": "20.17.10",
     "@vitest/coverage-istanbul": "^3.2.4",
+    "dayjs": "^1.11.19",
+    "dotenv": "^17.2.3",
     "fs-extra": "11.3.3",
     "rimraf": "6",
     "ts-node": "10.9.2",

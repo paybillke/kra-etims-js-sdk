@@ -55,7 +55,7 @@ export abstract class BaseClient {
     };
 
     // Business headers for non-initialization endpoints
-    if (!endpoint.endsWith('/initialize')) {
+    if (!endpoint.endsWith('/selectInitOsdcInfo')) {
       headers['tin'] = this.config.oscu.tin;
       headers['bhfId'] = this.config.oscu.bhf_id;
       if (this.config.oscu.cmc_key) {
@@ -81,7 +81,7 @@ export abstract class BaseClient {
       const response: AxiosResponse<string> = await axios(axiosConfig);
       return this.processResponse(response, endpointKey, method, data);
     } catch (error: unknown) {
-    if (endpoint.endsWith('/initialize')) {
+    if (endpoint.endsWith('/selectInitOsdcInfo')) {
     }
       if (axios.isAxiosError(error) && error.response) {
         return this.processResponse(
