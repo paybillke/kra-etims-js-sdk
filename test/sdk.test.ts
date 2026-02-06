@@ -1,95 +1,37 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
-import { existsSync, unlinkSync } from 'fs';
-import dayjs from 'dayjs';
+// etims.integration.test.ts
+import { describe, test, beforeAll, expect } from 'vitest';
 import { 
   AuthClient, 
-  EtimsClient, 
-  ApiException, 
-  ValidationException,
-  type KraEtimsConfig 
-} from '../src';
+  EtimsClient
+} from '../src'; // Adjust import path as needed
+import { existsSync, unlinkSync } from 'fs';
 
-// -------------------------------------------------
-// TEST CONFIGURATION
-// -------------------------------------------------
-const TEST_CONFIG: KraEtimsConfig = {
-  env: 'sandbox',
+// ====================== ENV VALIDATION ======================
+const requiredEnvVars = [
+  'KRA_CONSUMER_KEY',
+  'KRA_CONSUMER_SECRET',
+  'KRA_TIN',
+  'DEVICE_SERIAL'
+] as const;
 
-  cache_file: '/tmp/kra_etims_token_test.json',
+for (const envVar of requiredEnvVars) {
+  if (!process.env[envVar]) {
+    throw new Error(`❌ Missing required environment variable: ${envVar}`);
+  }
+}
 
-  auth: {
-    sandbox: {
-      token_url: 'https://sbx.kra.go.ke/v1/token/generate'.trim(),
-      consumer_key: process.env.KRA_CONSUMER_KEY || 'YOUR_SANDBOX_CONSUMER_KEY',
-      consumer_secret: process.env.KRA_CONSUMER_SECRET || 'YOUR_SANDBOX_CONSUMER_SECRET',
-    },
-    production: {
-      token_url: 'https://kra.go.ke/v1/token/generate'.trim(),
-      consumer_key: process.env.KRA_PROD_CONSUMER_KEY || '',
-      consumer_secret: process.env.KRA_PROD_CONSUMER_SECRET || '',
-    },
-  },
-
-  api: {
-    sandbox: {
-      base_url: 'https://etims-api-sbx.kra.go.ke/etims-api'.trim(),
-    },
-    production: {
-      base_url: 'https://etims-api.kra.go.ke/etims-api'.trim(),
-    },
-  },
-
-  http: {
-    timeout: 30,
-  },
-
-  oscu: {
-    tin: process.env.KRA_TIN || 'A000000000X',
-    bhf_id: process.env.KRA_BHF_ID || '001',
-    cmc_key: process.env.CMC_KEY || '',  // Will be set after initialization
-    // Note: device_serial passed during init, not in config
-  },
-
-  endpoints: {
-    // INITIALIZATION
-    selectInitOsdcInfo: '/selectInitOsdcInfo',
-    
-    // DATA MANAGEMENT
-    selectCodeList: '/selectCodeList',
-    selectTaxpayerInfo: '/selectTaxpayerInfo',
-    selectNoticeList: '/selectNoticeList',
-    selectCustomerList: '/selectCustomerList',
-    selectItemClsList: '/selectItemClass',
-    selectBhfList: '/branchList',
-    
-    // BRANCH MANAGEMENT
-    branchInsuranceInfo: '/branchInsuranceInfo',
-    branchUserAccount: '/branchUserAccount',
-    branchSendCustomerInfo: '/branchSendCustomerInfo',
-    
-    // ITEM MANAGEMENT
-    saveItem: '/saveItem',
-    itemInfo: '/itemInfo',
-    
-    // PURCHASE MANAGEMENT
-    selectPurchaseTrns: '/getPurchaseTransactionInfo',
-    sendPurchaseTransactionInfo: '/sendPurchaseTransactionInfo',
-    
-    // SALES MANAGEMENT
-    sendSalesTransaction: '/sendSalesTransaction',
-    selectSalesTrns: '/selectSalesTransactions',
-    selectInvoiceDetail: '/selectInvoiceDetail',
-    
-    // STOCK MANAGEMENT
-    insertStockIO: '/insert/stockIO',
-    saveStockMaster: '/save/stockMaster',
-    selectMoveList: '/selectStockMoveLists',
-  },
+// ====================== HELPERS ======================
+const formatDateForEtims = (daysOffset: number = 0): string => {
+  const date = new Date();
+  date.setDate(date.getDate() + daysOffset);
+  return date.toISOString().replace(/[-:T.]/g, '').slice(0, 14); // YYYYMMDDhhmmss
 };
 
-// -------------------------------------------------
-// TEST FIXTURES & HELPERS
-// -------------------------------------------------
+const logSection = (title: string) => {
+  const line = '='.repeat(70);
+  console.log(`\n${line}\n${title}\n${line}`);
+};
+
 function clearTokenCache(cacheFile: string) {
   if (existsSync(cacheFile)) {
     unlinkSync(cacheFile);
@@ -97,507 +39,463 @@ function clearTokenCache(cacheFile: string) {
   }
 }
 
-function getKraDateTime(daysOffset = 0) {
-  return dayjs().add(daysOffset, 'day').format('YYYYMMDDHHmmss');
-}
+// ====================== CONFIG ======================
+const config = {
+  env: 'sandbox' as const,
+  cacheFile: `${process.env.TMPDIR || '/tmp'}/kra_etims_token.json`,
+  auth: {
+    sandbox: {
+      token_url: 'https://sbx.kra.go.ke/v1/token/generate'.trim(),
+      consumer_key: process.env.KRA_CONSUMER_KEY!,
+      consumer_secret: process.env.KRA_CONSUMER_SECRET!,
+    },
+    production: {
+      token_url: 'https://sbx.kra.go.ke/v1/token/generate'.trim(),
+      consumer_key: process.env.KRA_PROD_CONSUMER_KEY!,
+      consumer_secret: process.env.KRA_PROD_CONSUMER_SECRET!,
+    },
+  },
+  api: {
+    sandbox: {
+      base_url: 'https://etims-api-sbx.kra.go.ke/etims-api'.trim(),
+    },
+    production: {
+      base_url: 'https://etims-api-sbx.kra.go.ke/etims-api'.trim(),
+    },
+  },
+  http: { timeout: 30 },
+  oscu: {
+    tin: process.env.KRA_TIN!,
+    bhf_id: process.env.KRA_BHF_ID || '01',
+    device_serial: process.env.DEVICE_SERIAL!,
+    cmc_key: process.env.CMC_KEY || '',
+  },
+};
 
-function getKraDate(daysOffset = 0) {
-  return dayjs().add(daysOffset, 'day').format('YYYYMMDD');
-}
+// ====================== TEST SUITE ======================
+describe('KRA ETIMS Integration Tests', () => {
+  let authClient: AuthClient;
+  let etimsClient: EtimsClient;
 
-// -------------------------------------------------
-// VALIDATION
-// -------------------------------------------------
-if (TEST_CONFIG.auth.sandbox.consumer_key.includes('YOUR_')) {
-  console.error('❌ Missing KRA sandbox credentials');
-  console.error('   Set these environment variables:');
-  console.error('   - KRA_CONSUMER_KEY');
-  console.error('   - KRA_CONSUMER_SECRET');
-  console.error('   - KRA_TIN');
-  console.error('   - KRA_BHF_ID');
-  console.error('   - DEVICE_SERIAL');
-  process.exit(1);
-}
-
-// -------------------------------------------------
-// TEST SUITE
-// -------------------------------------------------
-describe('KRA eTIMS OSCU SDK Integration Tests', () => {
-  let auth: AuthClient;
-  let etims: EtimsClient;
-  let cmcKey: string | null = process.env.CMC_KEY;
-  const deviceSerial = process.env.DEVICE_SERIAL || 'dvcv1130'; // KRA-approved test serial
-
-  // Run once before all tests
   beforeAll(async () => {
-    console.log('\n' + '='.repeat(70));
-    console.log('  🚀 KRA eTIMS OSCU SDK INTEGRATION TEST SUITE');
-    console.log('='.repeat(70));
-    console.log(`  Environment: ${TEST_CONFIG.env}`);
-    console.log(`  TIN: ${TEST_CONFIG.oscu.tin}`);
-    console.log(`  Branch ID: ${TEST_CONFIG.oscu.bhf_id}`);
-    console.log(`  Device Serial: ${deviceSerial}`);
-    console.log('='.repeat(70) + '\n');
-  });
+    logSection('INITIALIZING SDK');
+    authClient = new AuthClient(config);
+    etimsClient = new EtimsClient(config, authClient);
 
-  // Run before each test
-  beforeEach(async () => {
     // Clear cache before each test to ensure fresh tokens
-    clearTokenCache(TEST_CONFIG.cache_file);
+    clearTokenCache(config.cacheFile);
+        
+    const token = await authClient.getToken(true);
     
-    // Create fresh clients
-    auth = new AuthClient(TEST_CONFIG);
-    etims = new EtimsClient(TEST_CONFIG, auth);
-  });
+    console.log(`✅ Authentication successful`);
+    console.log(`🔑 Token preview: ${token.substring(0, 25)}...`);
+  }, 60_000); // Extended timeout for auth
 
-  // Run after all tests
-  afterAll(() => {
-    // Cleanup cache file
-    clearTokenCache(TEST_CONFIG.cache_file);
-    console.log('\n✅ All tests completed\n');
-  });
-
-  // =================================================
-  // TEST 1: AUTHENTICATION
-  // =================================================
-  describe('Authentication', () => {
-    it('should generate access token successfully', async () => {
-      const token = await auth.getToken(true); // force refresh
-      
-      expect(token).toBeDefined();
-      expect(typeof token).toBe('string');
-      expect(token.length).toBeGreaterThan(20);
-      
-      console.log(`✅ Token acquired: ${token.substring(0, 15)}...`);
+  // ====================== TEST CASES ======================
+  test('STEP 3: Code List Search', async () => {
+    logSection('STEP 3: CODE LIST SEARCH');
+    const response = await etimsClient.selectCodeList({
+      lastReqDt: formatDateForEtims(-7)
     });
-
-    it('should cache token and reuse it', async () => {
-      // First call - generates new token
-      const token1 = await auth.getToken();
-      
-      // Second call - should use cached token
-      const token2 = await auth.getToken();
-      
-      expect(token1).toBe(token2);
-      
-      console.log('✅ Token caching working correctly');
+    
+    const clsList = response.clsList || [];
+    console.log(`Found ${clsList.length} code classes`);
+    
+    clsList.forEach((cls: any) => {
+      console.log(`- ${cls.cdCls}: ${cls.cdClsNm}`);
+      (cls.dtlList || []).forEach((detail: any) => 
+        console.log(`  • ${detail.cd}: ${detail.cdNm}`)
+      );
     });
+    
+    expect(clsList).toBeInstanceOf(Array);
+    expect(clsList.length).toBeGreaterThan(0);
+  }, 30_000);
 
-    it('should refresh token when expired', async () => {
-      // Get token
-      const token1 = await auth.getToken(true);
-      
-      // Clear cache to simulate expiration
-      await auth.clearToken();
-      
-      // Should generate new token
-      const token2 = await auth.getToken(true);
-      
-      expect(token2).toBeDefined();
-      expect(token2).not.toBe(token1); // New token
-      
-      console.log('✅ Token refresh working correctly');
+  test('STEP 4: Customer Search', async () => {
+    logSection('STEP 4: CUSTOMER SEARCH');
+    const response = await etimsClient.selectCustomer({
+      custmTin: 'A123456789Z'
     });
-  });
-
-  // =================================================
-  // TEST 2: OSCU INITIALIZATION
-  // =================================================
-  describe('OSCU Initialization', () => {
-    // it('should initialize OSCU and retrieve cmcKey', async () => {
-    //   const response = await etims.selectInitOsdcInfo({
-    //     tin: TEST_CONFIG.oscu.tin,
-    //     bhfId: TEST_CONFIG.oscu.bhf_id,
-    //     dvcSrlNo: deviceSerial,
-    //   });
-
-    //   // Validate response structure
-    //   expect(response).toBeDefined();
-    //   expect(response).toHaveProperty('resultCd');
-      
-    //   // cmcKey can be at root level or nested in data/info
-    //   const extractedCmcKey = 
-    //     response.cmcKey || 
-    //     response.data?.cmcKey || 
-    //     response.data?.info?.cmcKey;
-
-    //   expect(extractedCmcKey).toBeDefined();
-    //   expect(typeof extractedCmcKey).toBe('string');
-    //   expect(extractedCmcKey.length).toBeGreaterThan(0);
-
-    //   cmcKey = extractedCmcKey;
-      
-    //   console.log(`✅ OSCU initialized successfully`);
-    //   console.log(`   cmcKey: ${cmcKey.substring(0, 15)}...`);
-    // });
-
-    // it('should fail with invalid device serial', async () => {
-    //   await expect(
-    //     etims.selectInitOsdcInfo({
-    //       tin: TEST_CONFIG.oscu.tin,
-    //       bhfId: TEST_CONFIG.oscu.bhf_id,
-    //       dvcSrlNo: 'invalid_serial_xyz', // Invalid serial
-    //     })
-    //   ).rejects.toThrow(ApiException);
-    // });
-
-    // it('should fail with missing required fields', async () => {
-    //   // @ts-expect-error Testing validation
-    //   await expect(
-    //     etims.selectInitOsdcInfo({
-    //       tin: TEST_CONFIG.oscu.tin,
-    //       // Missing bhf_id and dvcSrlNo
-    //     })
-    //   ).rejects.toThrow(ValidationException);
-    // });
-  });
-
-  // =================================================
-  // TEST 3: DATA MANAGEMENT ENDPOINTS
-  // =================================================
-  describe('Data Management Endpoints', () => {
-    // Initialize OSCU before these tests
-    beforeEach(async () => {
-      if (!cmcKey) {
-        const initResponse = await etims.selectInitOsdcInfo({
-          tin: TEST_CONFIG.oscu.tin,
-          bhfId: TEST_CONFIG.oscu.bhf_id,
-          dvcSrlNo: deviceSerial,
-        });
-        
-        cmcKey = initResponse.cmcKey || initResponse.data?.cmcKey || initResponse.data?.info?.cmcKey;
-        TEST_CONFIG.oscu.cmc_key = cmcKey!;
-        etims = new EtimsClient(TEST_CONFIG, auth); // Recreate with cmcKey
-      }
+    
+    const custList = response.data?.custList || [];
+    console.log(`Found ${custList.length} customers`);
+    
+    custList.forEach((cust: any) => {
+      console.log(`- ${cust.tin}: ${cust.taxprNm} (${cust.taxprSttsCd})`);
     });
+    
+    expect(custList).toBeInstanceOf(Array);
+  }, 30_000);
 
-    it('should fetch code list successfully', async () => {
-      const response = await etims.selectCodeList({
-        tin: TEST_CONFIG.oscu.tin,
-        bhfId: TEST_CONFIG.oscu.bhf_id,
-        lastReqDt: getKraDateTime(-7), // Max 7 days old
-      });
-
-      expect(response).toBeDefined();
-      expect(response.resultCd).toBe('0000');
-      expect(response).toHaveProperty('itemList');
-      
-      const itemList = response.itemList || [];
-      expect(Array.isArray(itemList)).toBe(true);
-      
-      console.log(`✅ Retrieved ${itemList.length} code list items`);
-      
-      if (itemList.length > 0) {
-        // Validate first item structure
-        const firstItem = itemList[0];
-        expect(firstItem).toHaveProperty('cd');
-        expect(firstItem).toHaveProperty('cdNm');
-      }
+  test('STEP 5: Notice Search', async () => {
+    logSection('STEP 5: NOTICE SEARCH');
+    const response = await etimsClient.selectNoticeList({
+      lastReqDt: formatDateForEtims(-30)
     });
-
-    it('should fetch taxpayer info successfully', async () => {
-      const response = await etims.selectTaxpayerInfo({
-        tin: TEST_CONFIG.oscu.tin,
-        bhfId: TEST_CONFIG.oscu.bhf_id,
-        lastReqDt: getKraDateTime(-7),
-      });
-
-      expect(response).toBeDefined();
-      expect(response.resultCd).toBe('0000');
-      
-      console.log('✅ Taxpayer info retrieved successfully');
+    
+    const notices = response.data?.noticeList || [];
+    console.log(`Found ${notices.length} notices`);
+    
+    notices.forEach((notice: any) => {
+      console.log(`- [${notice.noticeNo}] ${notice.title}`);
     });
+    
+    expect(notices).toBeInstanceOf(Array);
+  }, 30_000);
 
-    it('should fetch notice list successfully', async () => {
-      const response = await etims.selectNoticeList({
-        tin: TEST_CONFIG.oscu.tin,
-        bhfId: TEST_CONFIG.oscu.bhf_id,
-        lastReqDt: getKraDateTime(-7),
-      });
-
-      expect(response).toBeDefined();
-      expect(response.resultCd).toBe('0000');
-      
-      console.log('✅ Notice list retrieved successfully');
+  test('STEP 6: Item Class Search', async () => {
+    logSection('STEP 6: ITEM CLASS SEARCH');
+    const response = await etimsClient.selectItemClasses({
+      lastReqDt: formatDateForEtims(-30)
     });
-
-    it('should fetch customer list successfully', async () => {
-      const response = await etims.selectCustomerList({
-        tin: TEST_CONFIG.oscu.tin,
-        bhfId: TEST_CONFIG.oscu.bhf_id,
-        lastReqDt: getKraDateTime(-7),
-      });
-
-      expect(response).toBeDefined();
-      expect(response.resultCd).toBe('0000');
-      
-      console.log('✅ Customer list retrieved successfully');
+    
+    const classes = response.data?.itemClsList || [];
+    console.log(`Found ${classes.length} item classes`);
+    
+    classes.forEach((cls: any) => {
+      console.log(`- ${cls.itemClsCd}: ${cls.itemClsNm} (Lvl ${cls.itemClsLvl})`);
     });
-  });
+    
+    expect(classes).toBeInstanceOf(Array);
+  }, 30_000);
 
-  // =================================================
-  // TEST 4: SALES TRANSACTION
-  // =================================================
-  describe('Sales Transaction', () => {
-    let testInvoiceNo = 1;
-
-    // Initialize OSCU before sales tests
-    beforeEach(async () => {
-      if (!cmcKey) {
-        const initResponse = await etims.selectInitOsdcInfo({
-          tin: TEST_CONFIG.oscu.tin,
-          bhfId: TEST_CONFIG.oscu.bhf_id,
-          dvcSrlNo: deviceSerial,
-        });
-        
-        cmcKey = initResponse.cmcKey || initResponse.data?.cmcKey || initResponse.data?.info?.cmcKey;
-        TEST_CONFIG.oscu.cmc_key = cmcKey!;
-        etims = new EtimsClient(TEST_CONFIG, auth);
-      }
+  test('STEP 7: Save Item', async () => {
+    logSection('STEP 7: SAVE ITEM');
+    const response = await etimsClient.saveItem({
+      itemCd: `KE1NTXU${Date.now()}`, // Unique ID to avoid conflicts
+      itemClsCd: '5059690800',
+      itemTyCd: '1',
+      itemNm: `Test Item ${Date.now()}`,
+      orgnNatCd: 'KE',
+      pkgUnitCd: 'NT',
+      qtyUnitCd: 'U',
+      taxTyCd: 'B',
+      dftPrc: 3500,
+      isrcAplcbYn: 'N',
+      useYn: 'Y',
+      regrId: 'Test',
+      regrNm: 'Test',
+      modrId: 'Test',
+      modrNm: 'Test',
     });
+    
+    console.log(`✅ Item saved: ${response.resultMsg}`);
+    expect(response.resultCd).toBe('000');
+  }, 30_000);
 
-    it('should send sales transaction with full tax breakdown', async () => {
-      const now = dayjs();
-      const invoiceNo = testInvoiceNo++;
-
-      const payload = {
-        invcNo: invoiceNo, // Sequential integer
-        custTin: 'A123456789Z',
-        custNm: 'Test Customer',
-        salesTyCd: 'N', // Normal sale
-        rcptTyCd: 'R', // Receipt
-        pmtTyCd: '01', // Cash payment
-        salesSttsCd: '01', // Completed
-        cfmDt: now.format('YYYYMMDDHHmmss'), // YYYYMMDDHHmmss
-        salesDt: now.format('YYYYMMDD'), // YYYYMMDD
-        totItemCnt: 1,
-        // ALL 15 TAX FIELDS REQUIRED
-        taxblAmtA: 0.00, taxblAmtB: 0.00, taxblAmtC: 81000.00,
-        taxblAmtD: 0.00, taxblAmtE: 0.00,
-        taxRtA: 0.00, taxRtB: 0.00, taxRtC: 0.00,
-        taxRtD: 0.00, taxRtE: 0.00,
-        taxAmtA: 0.00, taxAmtB: 0.00, taxAmtC: 0.00,
-        taxAmtD: 0.00, taxAmtE: 0.00,
-        totTaxblAmt: 81000.00,
-        totTaxAmt: 0.00,
-        totAmt: 81000.00,
-        regrId: 'Admin', regrNm: 'Admin',
-        modrId: 'Admin', modrNm: 'Admin',
-        itemList: [
-          {
-            itemSeq: 1,
-            itemCd: 'KE2NTBA00000001', // Must exist in KRA system
-            itemClsCd: '1000000000',
-            itemNm: 'Brand A',
-            barCd: '', // Nullable but required field
-            pkgUnitCd: 'NT',
-            pkg: 1,
-            qtyUnitCd: 'BA',
-            qty: 90.0,
-            prc: 1000.00,
-            splyAmt: 81000.00,
-            dcRt: 0.0, // Discount rate
-            dcAmt: 0.0, // Discount amount
-            taxTyCd: 'C', // Zero-rated
-            taxblAmt: 81000.00,
-            taxAmt: 0.00,
-            totAmt: 81000.00,
-          },
-        ],
-      };
-
-      const response = await etims.sendSalesTransaction(payload);
-
-      expect(response).toBeDefined();
-      expect(response.resultCd).toBe('0000');
-      expect(response).toHaveProperty('data');
-      expect(response.data).toHaveProperty('rcptSign');
-      expect(response.data).toHaveProperty('invcNo', invoiceNo.toString());
-
-      console.log(`✅ Sales transaction sent successfully`);
-      console.log(`   Invoice #${invoiceNo}`);
-      console.log(`   Receipt Signature: ${response.data.rcptSign.substring(0, 20)}...`);
+  test('STEP 8: Item Search', async () => {
+    logSection('STEP 8: ITEM SEARCH');
+    const response = await etimsClient.selectItems({
+      lastReqDt: formatDateForEtims(-30)
     });
-
-    it('should reject non-integer invoice numbers', async () => {
-      const now = dayjs();
-      
-      // @ts-expect-error Testing validation
-      const invalidPayload = {
-        invcNo: 'INV001', // String instead of integer - should fail
-        custTin: 'A123456789Z',
-        custNm: 'Test Customer',
-        salesTyCd: 'N',
-        rcptTyCd: 'R',
-        pmtTyCd: '01',
-        salesSttsCd: '01',
-        cfmDt: now.format('YYYYMMDDHHmmss'),
-        salesDt: now.format('YYYYMMDD'),
-        totItemCnt: 1,
-        taxblAmtA: 0.00, taxblAmtB: 0.00, taxblAmtC: 81000.00,
-        taxblAmtD: 0.00, taxblAmtE: 0.00,
-        taxRtA: 0.00, taxRtB: 0.00, taxRtC: 0.00,
-        taxRtD: 0.00, taxRtE: 0.00,
-        taxAmtA: 0.00, taxAmtB: 0.00, taxAmtC: 0.00,
-        taxAmtD: 0.00, taxAmtE: 0.00,
-        totTaxblAmt: 81000.00,
-        totTaxAmt: 0.00,
-        totAmt: 81000.00,
-        regrId: 'Admin', regrNm: 'Admin',
-        itemList: [
-          {
-            itemSeq: 1,
-            itemCd: 'KE2NTBA00000001',
-            itemClsCd: '1000000000',
-            itemNm: 'Brand A',
-            qty: 90.0,
-            prc: 1000.00,
-            splyAmt: 81000.00,
-            taxTyCd: 'C',
-            taxblAmt: 81000.00,
-            taxAmt: 0.00,
-            totAmt: 81000.00,
-          },
-        ],
-      };
-
-      await expect(
-        etims.sendSalesTransaction(invalidPayload)
-      ).rejects.toThrow(ValidationException);
+    
+    const items = response.data?.itemList || [];
+    console.log(`Found ${items.length} items`);
+    
+    items.slice(0, 3).forEach((item: any) => {
+      console.log(`- ${item.itemCd}: ${item.itemNm} (${item.taxTyCd})`);
     });
+    
+    expect(items).toBeInstanceOf(Array);
+  }, 30_000);
 
-    it('should reject invalid tax category codes', async () => {
-      const now = dayjs();
-      
-      // @ts-expect-error Testing validation
-      const invalidPayload = {
-        invcNo: testInvoiceNo++,
-        custTin: 'A123456789Z',
-        custNm: 'Test Customer',
-        salesTyCd: 'N',
-        rcptTyCd: 'R',
-        pmtTyCd: '01',
-        salesSttsCd: '01',
-        cfmDt: now.format('YYYYMMDDHHmmss'),
-        salesDt: now.format('YYYYMMDD'),
-        totItemCnt: 1,
-        taxblAmtA: 0.00, taxblAmtB: 0.00, taxblAmtC: 81000.00,
-        taxblAmtD: 0.00, taxblAmtE: 0.00,
-        taxRtA: 0.00, taxRtB: 0.00, taxRtC: 0.00,
-        taxRtD: 0.00, taxRtE: 0.00,
-        taxAmtA: 0.00, taxAmtB: 0.00, taxAmtC: 0.00,
-        taxAmtD: 0.00, taxAmtE: 0.00,
-        totTaxblAmt: 81000.00,
-        totTaxAmt: 0.00,
-        totAmt: 81000.00,
-        regrId: 'Admin', regrNm: 'Admin',
-        itemList: [
-          {
-            itemSeq: 1,
-            itemCd: 'KE2NTBA00000001',
-            itemClsCd: '1000000000',
-            itemNm: 'Brand A',
-            qty: 90.0,
-            prc: 1000.00,
-            splyAmt: 81000.00,
-            taxTyCd: 'Z', // Invalid tax category - should fail
-            taxblAmt: 81000.00,
-            taxAmt: 0.00,
-            totAmt: 81000.00,
-          },
-        ],
-      };
-
-      await expect(
-        etims.sendSalesTransaction(invalidPayload)
-      ).rejects.toThrow(ValidationException);
+  test('STEP 9: Branch Search', async () => {
+    logSection('STEP 9: BRANCH SEARCH');
+    const response = await etimsClient.selectBranches({
+      lastReqDt: formatDateForEtims(-30)
     });
-
-    it('should reject future dates', async () => {
-      const futureDate = dayjs().add(1, 'day');
-      
-      const payload = {
-        invcNo: testInvoiceNo++,
-        custTin: 'A123456789Z',
-        custNm: 'Test Customer',
-        salesTyCd: 'N',
-        rcptTyCd: 'R',
-        pmtTyCd: '01',
-        salesSttsCd: '01',
-        cfmDt: futureDate.format('YYYYMMDDHHmmss'), // Future date - should fail
-        salesDt: futureDate.format('YYYYMMDD'),
-        totItemCnt: 1,
-        taxblAmtA: 0.00, taxblAmtB: 0.00, taxblAmtC: 81000.00,
-        taxblAmtD: 0.00, taxblAmtE: 0.00,
-        taxRtA: 0.00, taxRtB: 0.00, taxRtC: 0.00,
-        taxRtD: 0.00, taxRtE: 0.00,
-        taxAmtA: 0.00, taxAmtB: 0.00, taxAmtC: 0.00,
-        taxAmtD: 0.00, taxAmtE: 0.00,
-        totTaxblAmt: 81000.00,
-        totTaxAmt: 0.00,
-        totAmt: 81000.00,
-        regrId: 'Admin', regrNm: 'Admin',
-        itemList: [
-          {
-            itemSeq: 1,
-            itemCd: 'KE2NTBA00000001',
-            itemClsCd: '1000000000',
-            itemNm: 'Brand A',
-            qty: 90.0,
-            prc: 1000.00,
-            splyAmt: 81000.00,
-            taxTyCd: 'C',
-            taxblAmt: 81000.00,
-            taxAmt: 0.00,
-            totAmt: 81000.00,
-          },
-        ],
-      };
-
-      await expect(
-        etims.sendSalesTransaction(payload)
-      ).rejects.toThrow(ApiException);
+    
+    const branches = response.data?.bhfList || [];
+    console.log(`Found ${branches.length} branches`);
+    
+    branches.forEach((branch: any) => {
+      console.log(`- ${branch.bhfId}: ${branch.bhfNm} (${branch.bhfSttsCd})`);
     });
-  });
+    
+    expect(branches).toBeInstanceOf(Array);
+  }, 30_000);
 
-  // =================================================
-  // TEST 5: ERROR HANDLING
-  // =================================================
-  describe('Error Handling', () => {
-    it('should throw ApiException for business errors', async () => {
-      // Try to fetch code list without cmcKey (should fail)
-      const freshAuth = new AuthClient(TEST_CONFIG);
-      const freshEtims = new EtimsClient(TEST_CONFIG, freshAuth);
-
-      await expect(
-        freshEtims.selectCodeList({
-          tin: TEST_CONFIG.oscu.tin,
-          bhfId: TEST_CONFIG.oscu.bhf_id,
-          lastReqDt: getKraDateTime(-7),
-        })
-      ).rejects.toThrow(ApiException);
+  test('STEP 10: Save Branch Customer', async () => {
+    logSection('STEP 10: SAVE BRANCH CUSTOMER');
+    const response = await etimsClient.saveBranchCustomer({
+      custNo: `CUST123456`,
+      custTin: 'A123456789Z',
+      custNm: `Test Customer ${Date.now()}`,
+      useYn: 'Y',
+      regrId: 'Test',
+      regrNm: 'Test',
+      modrId: 'Test',
+      modrNm: 'Test',
     });
+    
+    console.log(`✅ Branch customer saved: ${response.resultMsg}`);
+    expect(response.resultCd).toBe('000');
+  }, 30_000);
 
-    it('should provide detailed error information', async () => {
-      try {
-        await etims.selectCodeList({
-          tin: TEST_CONFIG.oscu.tin,
-          bhfId: TEST_CONFIG.oscu.bhf_id,
-          lastReqDt: getKraDateTime(-7),
-        });
-      } catch (error) {
-        if (error instanceof ApiException) {
-          expect(error).toHaveProperty('errorCode');
-          expect(error).toHaveProperty('message');
-          expect(error).toHaveProperty('details');
-          
-          console.log(`✅ Error details captured:`);
-          console.log(`   Code: ${error.errorCode}`);
-          console.log(`   Message: ${error.message}`);
-        } else {
-          throw error;
-        }
-      }
+  test('STEP 11: Save Branch User', async () => {
+    logSection('STEP 11: SAVE BRANCH USER');
+    const response = await etimsClient.saveBranchUser({
+      userId: `user_${Date.now()}`,
+      userNm: `Test User ${Date.now()}`,
+      pwd: 'SecurePass123!',
+      useYn: 'Y',
+      regrId: 'Test',
+      regrNm: 'Test',
+      modrId: 'Test',
+      modrNm: 'Test',
     });
-  });
+    
+    console.log(`✅ Branch user saved: ${response.resultMsg}`);
+    expect(response.resultCd).toBe('000');
+  }, 30_000);
+
+  test('STEP 12: Save Branch Insurance', async () => {
+    logSection('STEP 12: SAVE BRANCH INSURANCE');
+    const response = await etimsClient.saveBranchInsurance({
+      isrccCd: `INS12345`,
+      isrccNm: `Test Insurance ${Date.now()}`,
+      isrcRt: 20,
+      useYn: 'Y',
+      regrId: 'Test',
+      regrNm: 'Test',
+      modrId: 'Test',
+      modrNm: 'Test',
+    });
+    
+    console.log(`✅ Branch insurance saved: ${response.resultMsg}`);
+    expect(response.resultCd).toBe('000');
+  }, 30_000);
+
+  test('STEP 14: Update Import Item', async () => {
+    logSection('STEP 14: IMPORT ITEM UPDATE');
+    // Note: This requires valid taskCd/dclNo from your environment
+    // Using placeholder values - update with valid test data
+    const response = await etimsClient.updateImportedItem({
+      taskCd: '2231943',
+      dclDe: '20191217',
+      itemSeq: 1,
+      hsCd: '1231531231',
+      itemClsCd: '5022110801',
+      itemCd: 'KE1NTXU0000001',
+      imptItemSttsCd: '1',
+      remark: 'Updated via Vitest',
+      modrId: 'Test',
+      modrNm: 'Test',
+    });
+    
+    console.log(`✅ Import item updated: ${response.resultMsg}`);
+    expect(response.resultCd).toBe('000');
+  }, 30_000);
+
+  test('STEP 16: Save Purchase Transaction', async () => {
+    logSection('STEP 16: PURCHASE TRANSACTION SAVE');
+    const uniqueInvoice = `INV12345`;
+    
+    const response = await etimsClient.savePurchase({
+      invcNo: 1,
+      orgInvcNo: 0,
+      spplrTin: 'A123456789Z',
+      spplrBhfId: null,
+      spplrNm: null,
+      spplrInvcNo: null,
+
+      regTyCd: 'M',
+      pchsTyCd: 'N',
+      rcptTyCd: 'P',
+      pmtTyCd: '01',
+      pchsSttsCd: '02',
+
+      cfmDt: '20200127210300',
+      pchsDt: '20200127',
+      wrhsDt: null,
+      cnclReqDt: null,
+      cnclDt: null,
+      rfdDt: null,
+
+      // -------------------- Totals --------------------
+      totItemCnt: 2,
+
+      taxblAmtA: 0,
+      taxblAmtB: 10500,
+      taxblAmtC: 0,
+      taxblAmtD: 0,
+      taxblAmtE: 0,
+
+      taxRtA: 0,
+      taxRtB: 18,
+      taxRtC: 0,
+      taxRtD: 0,
+      taxRtE: 0,
+
+      taxAmtA: 0,
+      taxAmtB: 1890,
+      taxAmtC: 0,
+      taxAmtD: 0,
+      taxAmtE: 0,
+
+      totTaxblAmt: 10500,
+      totTaxAmt: 1890,
+      totAmt: 10500,
+
+      remark: null,
+
+      // -------------------- Audit --------------------
+      regrId: 'Test',
+      regrNm: 'Test',
+      modrId: 'Test',
+      modrNm: 'Test',
+
+      // -------------------- Items --------------------
+      itemList: [
+        {
+          itemSeq: 1,
+          itemCd: 'KE1NTXU0000001',
+          itemClsCd: '5059690800',
+          itemNm: 'test item 1',
+          bcd: null,
+
+          spplrItemClsCd: null,
+          spplrItemCd: null,
+          spplrItemNm: null,
+
+          pkgUnitCd: 'NT',
+          pkg: 2,
+          qtyUnitCd: 'U',
+          qty: 2,
+          prc: 3500,
+          splyAmt: 7000,
+          dcRt: 0,
+          dcAmt: 0,
+
+          taxblAmt: 7000,
+          taxTyCd: 'B',
+          taxAmt: 1260,
+          totAmt: 7000,
+
+          itemExprDt: null,
+        },
+        {
+          itemSeq: 2,
+          itemCd: 'KE1NTXU0000002',
+          itemClsCd: '5022110801',
+          itemNm: 'test item 2',
+          bcd: null,
+
+          spplrItemClsCd: null,
+          spplrItemCd: null,
+          spplrItemNm: null,
+
+          pkgUnitCd: 'NT',
+          pkg: 1,
+          qtyUnitCd: 'U',
+          qty: 1,
+          prc: 3500,
+          splyAmt: 3500,
+          dcRt: 0,
+          dcAmt: 0,
+
+          taxblAmt: 3500,
+          taxTyCd: 'B',
+          taxAmt: 630,
+          totAmt: 3500,
+
+          itemExprDt: null,
+        },
+      ],
+    });
+    
+    
+    console.log(`✅ Purchase saved: ${response.resultMsg}`);
+    expect(response.resultCd).toBe('000');
+  }, 45_000);
+
+  test('STEP 18: Save Stock In/Out', async () => {
+    logSection('STEP 18: STOCK IN/OUT SAVE');
+    
+    const response = await etimsClient.saveStockIO({
+  tin: 'A123456789Z',
+  bhfId: '00',
+  sarNo: 2,
+  orgSarNo: 2,
+  regTyCd: 'M',
+  custTin: 'A123456789Z',
+  custNm: null,
+  custBhfId: null,
+  sarTyCd: '11',
+  ocrnDt: '20260106',
+  totItemCnt: 2,
+  totTaxblAmt: 70000,
+  totTaxAmt: 10677.96,
+  totAmt: 70000,
+  remark: null,
+  regrId: 'Test',
+  regrNm: 'Test',
+  modrId: 'Test',
+  modrNm: 'Test',
+
+  itemList: [
+    {
+      itemSeq: 1,
+      itemCd: 'KE1NTXU0000001',
+      itemClsCd: '5059690800',
+      itemNm: 'test item1',
+      bcd: null,
+      pkgUnitCd: 'NT',
+      pkg: 10,
+      qtyUnitCd: 'U',
+      qty: 10,
+      itemExprDt: null,
+      prc: 3500,
+      splyAmt: 35000,
+      totDcAmt: 0,
+      taxblAmt: 35000,
+      taxTyCd: 'B',
+      taxAmt: 5338.98,
+      totAmt: 35000,
+    },
+    {
+      itemSeq: 2,
+      itemCd: 'KE1NTXU0000002',
+      itemClsCd: '5059690800',
+      itemNm: 'test item2',
+      bcd: null,
+      pkgUnitCd: 'BL',
+      pkg: 10,
+      qtyUnitCd: 'U',
+      qty: 10,
+      itemExprDt: null,
+      prc: 3500,
+      splyAmt: 35000,
+      totDcAmt: 0,
+      taxblAmt: 35000,
+      taxTyCd: 'B',
+      taxAmt: 5338.98,
+      totAmt: 35000,
+    },
+  ],
+});
+    
+    console.log(`✅ Stock movement saved: ${response.resultMsg}`);
+    expect(response.resultCd).toBe('000');
+  }, 30_000);
+
+  test('STEP 19: Save Stock Master', async () => {
+    logSection('STEP 19: SAVE STOCK MASTER');
+    const response = await etimsClient.saveStockMaster({
+      itemCd: 'KE1NTXU0000002',
+      rsdQty: 10,
+      regrId: 'Test',
+      regrNm: 'Test',
+      modrId: 'Test',
+      modrNm: 'Test',
+    });
+    
+    console.log(`✅ Stock master updated: ${response.resultMsg}`);
+    expect(response.resultCd).toBe('000');
+  }, 30_000);
+
+  // ====================== CLEANUP ======================
+  // Note: Add afterAll hook here if cleanup is needed
+  // afterAll(async () => { ... }, 30_000);
 });

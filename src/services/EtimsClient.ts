@@ -11,158 +11,111 @@ export class EtimsClient extends BaseClient {
     this.validator = new Validator();
   }
 
-  /**
-   * Internal validation helper
-   */
-  protected validate(
-    data: Record<string, unknown>,
-    schema: string
-  ): Record<string, unknown> {
+  protected validate(data: Record<string, unknown>, schema: string): Record<string, unknown> {
     return this.validator.validate(data, schema);
   }
 
-  // =============================
-  // INITIALIZATION (POSTMAN-COMPLIANT)
-  // =============================
+  // -----------------------------
+  // INITIALIZATION
+  // -----------------------------
   async selectInitOsdcInfo(data: Record<string, unknown>): Promise<unknown> {
-    /**
-     * ✔ validates ONLY: tin, bhfId, dvcSrlNo
-     * ✔ BaseClient handles auth headers + retries
-     */
-    const validated = this.validate(data, 'initialization');
-    return this.post('selectInitOsdcInfo', validated);
+    return this.post('selectInitOsdcInfo', this.validate(data, 'initialization'));
   }
 
-  // =============================
-  // BASIC DATA ENDPOINTS
-  // =============================
+  // -----------------------------
+  // CODE LISTS
+  // -----------------------------
   async selectCodeList(data: Record<string, unknown>): Promise<unknown> {
-    return this.post('selectCodeList', this.validate(data, 'codeList'));
+    return this.post('selectCodeList', this.validate(data, 'lastReqOnly'));
   }
 
-  async selectItemClsList(data: Record<string, unknown>): Promise<unknown> {
-    return this.post('selectItemClsList', this.validate(data, 'itemClsList'));
+  // -----------------------------
+  // CUSTOMER / BRANCH
+  // -----------------------------
+  async selectCustomer(data: Record<string, unknown>): Promise<unknown> {
+    return this.post('selectCustomer', this.validate(data, 'custSearchReq'));
   }
 
-  async selectBhfList(data: Record<string, unknown>): Promise<unknown> {
-    return this.post('selectBhfList', this.validate(data, 'bhfList'));
+  async selectBranches(data: Record<string, unknown>): Promise<unknown> {
+    return this.post('selectBhfList', this.validate(data, 'lastReqOnly'));
   }
 
-  async selectNoticeList(data: Record<string, unknown>): Promise<unknown> {
-    return this.post('selectNoticeList', this.validate(data, 'noticeList'));
+  async saveBranchCustomer(data: Record<string, unknown>): Promise<unknown> {
+    return this.post('saveBhfCustomer', this.validate(data, 'branchCustomer'));
   }
 
-  async selectTaxpayerInfo(data: Record<string, unknown>): Promise<unknown> {
-    return this.post(
-      'selectTaxpayerInfo',
-      this.validate(data, 'taxpayerInfo')
-    );
+  async saveBranchUser(data: Record<string, unknown>): Promise<unknown> {
+    return this.post('saveBhfUser', this.validate(data, 'branchUser'));
   }
 
-  async selectCustomerList(data: Record<string, unknown>): Promise<unknown> {
-    return this.post(
-      'selectCustomerList',
-      this.validate(data, 'customerList')
-    );
+  async saveBranchInsurance(data: Record<string, unknown>): Promise<unknown> {
+    return this.post('saveBhfInsurance', this.validate(data, 'branchInsurance'));
   }
 
-  // =============================
-  // PURCHASE ENDPOINTS
-  // =============================
-  async selectPurchaseTrns(data: Record<string, unknown>): Promise<unknown> {
-    return this.post(
-      'selectPurchaseTrns',
-      this.validate(data, 'purchaseTrns')
-    );
+  // -----------------------------
+  // ITEM
+  // -----------------------------
+  async selectItemClasses(data: Record<string, unknown>): Promise<unknown> {
+    return this.post('selectItemClsList', this.validate(data, 'lastReqOnly'));
   }
 
-  // =============================
-  // SALES ENDPOINTS
-  // =============================
-  async sendSalesTrns(data: Record<string, unknown>): Promise<unknown> {
-    return this.post(
-      'sendSalesTrns',
-      this.validate(data, 'salesTrns')
-    );
-  }
-
-  async selectSalesTrns(data: Record<string, unknown>): Promise<unknown> {
-    return this.post(
-      'selectSalesTrns',
-      this.validate(data, 'selectSalesTrns')
-    );
-  }
-
-  // =============================
-  // STOCK ENDPOINTS
-  // =============================
-  async selectMoveList(data: Record<string, unknown>): Promise<unknown> {
-    return this.post(
-      'selectMoveList',
-      this.validate(data, 'moveList')
-    );
-  }
-
-  async saveStockMaster(data: Record<string, unknown>): Promise<unknown> {
-    return this.post(
-      'saveStockMaster',
-      this.validate(data, 'stockMaster')
-    );
-  }
-
-  // =============================
-  // ADDITIONAL / POSTMAN ENDPOINTS
-  // =============================
-  async branchInsuranceInfo(data: Record<string, unknown>): Promise<unknown> {
-    return this.post(
-      'branchInsuranceInfo',
-      this.validate(data, 'branchInsurance')
-    );
-  }
-
-  async branchUserAccount(data: Record<string, unknown>): Promise<unknown> {
-    return this.post(
-      'branchUserAccount',
-      this.validate(data, 'branchUserAccount')
-    );
-  }
-
-  async branchSendCustomerInfo(data: Record<string, unknown>): Promise<unknown> {
-    return this.post(
-      'branchSendCustomerInfo',
-      this.validate(data, 'customerInfo')
-    );
-  }
-
-  async sendPurchaseTransactionInfo(
-    data: Record<string, unknown>
-  ): Promise<unknown> {
-    return this.post(
-      'sendPurchaseTransactionInfo',
-      this.validate(data, 'purchaseTransaction')
-    );
-  }
-
-  async sendSalesTransaction(
-    data: Record<string, unknown>
-  ): Promise<unknown> {
-    return this.post(
-      'sendSalesTransaction',
-      this.validate(data, 'salesTransaction')
-    );
+  async selectItems(data: Record<string, unknown>): Promise<unknown> {
+    return this.post('selectItemList', this.validate(data, 'lastReqOnly'));
   }
 
   async saveItem(data: Record<string, unknown>): Promise<unknown> {
-    return this.post(
-      'saveItem',
-      this.validate(data, 'item')
-    );
+    return this.post('saveItem', this.validate(data, 'saveItem'));
   }
 
-  async insertStockIO(data: Record<string, unknown>): Promise<unknown> {
-    return this.post(
-      'insertStockIO',
-      this.validate(data, 'stockIO')
-    );
+  async saveItemComposition(data: Record<string, unknown>): Promise<unknown> {
+    return this.post('SaveItemComposition', this.validate(data, 'itemComposition'));
+  }
+
+  // -----------------------------
+  // IMPORTED ITEMS
+  // -----------------------------
+  async selectImportedItems(data: Record<string, unknown>): Promise<unknown> {
+    return this.post('selectImportItemList', this.validate(data, 'lastReqOnly'));
+  }
+
+  async updateImportedItem(data: Record<string, unknown>): Promise<unknown> {
+    return this.post('updateImportItem', this.validate(data, 'importItemUpdate'));
+  }
+
+  // -----------------------------
+  // PURCHASES
+  // -----------------------------
+  async selectPurchases(data: Record<string, unknown>): Promise<unknown> {
+    return this.post('selectTrnsPurchaseSalesList', this.validate(data, 'lastReqOnly'));
+  }
+
+  async savePurchase(data: Record<string, unknown>): Promise<unknown> {
+    return this.post('insertTrnsPurchase', this.validate(data, 'insertTrnsPurchase'));
+  }
+
+  async saveSalesTransaction(data: Record<string, unknown>): Promise<unknown> {
+    return this.post('TrnsSalesSaveWrReq', this.validate(data, 'lastReqOnly'));
+  }
+
+  // -----------------------------
+  // STOCK
+  // -----------------------------
+  async selectStockMovement(data: Record<string, unknown>): Promise<unknown> {
+    return this.post('selectStockMoveList', this.validate(data, 'lastReqOnly'));
+  }
+
+  async saveStockIO(data: Record<string, unknown>): Promise<unknown> {
+    return this.post('insertStockIO', this.validate(data, 'saveStockIO'));
+  }
+
+  async saveStockMaster(data: Record<string, unknown>): Promise<unknown> {
+    return this.post('saveStockMaster', this.validate(data, 'stockMaster'));
+  }
+
+  // -----------------------------
+  // NOTICES
+  // -----------------------------
+  async selectNoticeList(data: Record<string, unknown>): Promise<unknown> {
+    return this.post('selectNoticeList', this.validate(data, 'lastReqOnly'));
   }
 }

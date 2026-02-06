@@ -5,170 +5,153 @@ import { ApiException } from '../exceptions/ApiException';
 import { AuthenticationException } from '../exceptions/AuthenticationException';
 
 export abstract class BaseClient {
-  protected readonly timeoutMs: number;
+  private static readonly endpoints: Record<string, string> = {
+    selectInitOsdcInfo: '/selectInitOsdcInfo',
+    selectCodeList: '/selectCodeList',
+    selectCustomer: '/selectCustomer',
+    selectNoticeList: '/selectNoticeList',
+    selectItemClsList: '/selectItemClsList',
+    selectItemList: '/selectItemList',
+    saveItem: '/saveItem',
+    SaveItemComposition: '/saveItemComposition',
+    selectBhfList: '/selectBhfList',
+    saveBhfCustomer: '/saveBhfCustomer',
+    saveBhfUser: '/saveBhfUser',
+    saveBhfInsurance: '/saveBhfInsurance',
+    selectImportItemList: '/selectImportItemList',
+    updateImportItem: '/updateImportItem',
+    TrnsSalesSaveWrReq: '/saveTrnsSalesOsdc',
+    selectTrnsPurchaseSalesList: '/selectTrnsPurchaseSalesList',
+    insertTrnsPurchase: '/insertTrnsPurchase',
+    selectStockMoveList: '/selectStockMoveList',
+    insertStockIO: '/insertStockIO',
+    saveStockMaster: '/saveStockMaster',
+  };
 
   constructor(
     protected config: KraEtimsConfig,
     protected auth: AuthClient
-  ) {
-    this.timeoutMs = (config.http?.timeout ?? 30) * 1000;
+  ) {}
+
+  protected baseUrl(): string {
+    return this.config.api[this.config.env].base_url.replace(/\/+$/, '');
   }
 
-  protected getBaseUrl(): string {
-    return this.config.api[this.config.env].base_url.trim().replace(/\/+$/, '');
+  protected timeout(): number {
+    return (this.config.http?.timeout ?? 30) * 1000;
   }
 
-  protected getEndpoint(key: string): string {
+  protected endpoint(key: string): string {
     if (key.startsWith('/')) {
       throw new ApiException(
         `Endpoint key expected, path given [${key}]. Pass endpoint keys only.`,
         500
       );
     }
-    const endpoint = this.config.endpoints[key];
-    if (!endpoint) {
-      throw new ApiException(`Endpoint [${key}] not configured`, 500);
+    const ep = (BaseClient.endpoints as Record<string, string>)[key];
+    if (!ep) throw new ApiException(`Endpoint [${key}] not configured`, 500);
+    return ep;
+  }
+
+  protected async get(endpointKey: string, query: Record<string, unknown> = {}): Promise<any> {
+    return this.send('GET', endpointKey, query);
+  }
+
+  protected async post(endpointKey: string, body: Record<string, unknown> = {}): Promise<any> {
+    return this.send('POST', endpointKey, body);
+  }
+
+  protected async send(method: 'GET' | 'POST', endpointKey: string, data: Record<string, unknown>): Promise<any> {
+    const endpoint = this.endpoint(endpointKey);
+    let response = await this.request(method, endpoint, data);
+
+    if (this.isTokenExpired(response)) {
+      await this.auth.clearToken();
+      await this.auth.getToken(true); // force refresh
+      response = await this.request(method, endpoint, data);
     }
-    return endpoint;
+
+    return this.unwrap(response);
   }
 
   protected async request(
     method: 'GET' | 'POST',
-    endpointKey: string,
-    data?: Record<string, unknown>
-  ): Promise<unknown> {
-    let accessToken: string;
-    try {
-      accessToken = await this.auth.getToken();
-    } catch (error) {
-      throw new AuthenticationException('Failed to obtain access token');
-    }
+    endpoint: string,
+    data: Record<string, unknown>
+  ): Promise<{ status: number; body: string; json: Record<string, any> }> {
+    const url = method === 'GET' && Object.keys(data).length
+      ? `${this.baseUrl()}${endpoint}?${new URLSearchParams(data as Record<string, string>).toString()}`
+      : `${this.baseUrl()}${endpoint}`;
 
-    const endpoint = this.getEndpoint(endpointKey);
-    const url = `${this.getBaseUrl()}${endpoint}`;
-
-    // Build headers with endpoint-specific logic
-    const headers: Record<string, string> = {
-      'Authorization': `Bearer ${accessToken}`,
-      'Content-Type': 'application/json',
-      'Accept': 'application/json',
-    };
-
-    // Business headers for non-initialization endpoints
-    if (!endpoint.endsWith('/selectInitOsdcInfo')) {
-      headers['tin'] = this.config.oscu.tin;
-      headers['bhfId'] = this.config.oscu.bhf_id;
-      if (this.config.oscu.cmc_key) {
-        headers['cmcKey'] = this.config.oscu.cmc_key;
-      }
-    }
-
-    // Prepare request config
-    const axiosConfig = {
-      method,
-      url,
-      headers,
-      timeout: this.timeoutMs,
-      responseType: 'text' as const, // Critical: get raw response for parsing
-      ...(method === 'GET' && data && Object.keys(data).length > 0
-        ? { params: data }
-        : method !== 'GET' && data
-        ? { data: JSON.stringify(data) }
-        : {}),
-    };
+    const headers = await this.buildHeaders(endpoint);
 
     try {
-      const response: AxiosResponse<string> = await axios(axiosConfig);
-      return this.processResponse(response, endpointKey, method, data);
+      const response: AxiosResponse<string> = await axios({
+        method,
+        url,
+        headers,
+        timeout: this.timeout(),
+        responseType: 'text',
+        ...(method !== 'GET' && data ? { data: JSON.stringify(data) } : {}),
+      });
+
+      return {
+        status: response.status,
+        body: response.data,
+        json: response.data ? JSON.parse(response.data) : {},
+      };
     } catch (error: unknown) {
-    if (endpoint.endsWith('/selectInitOsdcInfo')) {
-    }
       if (axios.isAxiosError(error) && error.response) {
-        return this.processResponse(
-          error.response as AxiosResponse<string>,
-          endpointKey,
-          method,
-          data
-        );
+        const r = error.response as AxiosResponse<string>;
+        return {
+          status: r.status,
+          body: r.data,
+          json: r.data ? JSON.parse(r.data) : {},
+        };
       }
-      throw new ApiException(
-        `Request failed: ${error instanceof Error ? error.message : 'unknown'}`,
-        500
-      );
+      throw new ApiException(`Request failed: ${error instanceof Error ? error.message : 'unknown'}`, 500);
     }
   }
 
-  private async processResponse(
-    response: AxiosResponse<string>,
-    endpointKey: string,
-    method: string,
-    originalData?: Record<string, unknown>
-  ): Promise<unknown> {
-    let jsonBody: Record<string, unknown> = {};
-    try {
-      jsonBody = response.data ? JSON.parse(response.data) : {};
-    } catch {
-      // Keep empty object on parse failure
+  protected async buildHeaders(endpoint: string): Promise<Record<string, string>> {
+    const token = await this.auth.getToken();
+    // Initialization endpoint → only auth
+    if (endpoint.endsWith('/selectInitOsdcInfo')) {
+      return {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      };
     }
 
-    // Handle token expiration (retry once)
-    if (this.isTokenExpired(response.status, jsonBody)) {
-      await this.auth.clearToken();
-      try {
-        await this.auth.getToken(true); // Force refresh
-        return this.request(method as 'GET' | 'POST', endpointKey, originalData);
-      } catch {
-        throw new AuthenticationException('Token refresh failed after expiration');
-      }
-    }
-
-    return this.unwrap(response.status, jsonBody, response.data);
+    // All other endpoints → full business headers
+    const { tin, bhf_id, cmc_key } = this.config.oscu || {};
+    return {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      tin: tin ?? '',
+      bhfId: bhf_id ?? '',
+      cmcKey: cmc_key ?? '',
+    };
   }
 
-  private isTokenExpired(status: number, body: Record<string, unknown>): boolean {
-    if (status === 401) return true;
-    
-    const faultString = (body.fault as Record<string, string>)?.faultstring || '';
-    return /access token expired|invalid token/i.test(faultString);
+  protected isTokenExpired(response: { status: number; json: Record<string, any> }): boolean {
+    if (response.status === 401) return true;
+    const fault = response.json?.fault?.faultstring ?? '';
+    return /access token expired|invalid token/i.test(fault);
   }
 
-  private unwrap(
-    status: number,
-    json: Record<string, unknown>,
-    rawBody: string
-  ): unknown {
-    // Handle KRA business errors
-    if (json.resultCd && json.resultCd !== '0000') {
-      throw new ApiException(
-        (json.resultMsg as string) || 'KRA business error',
-        400,
-        json.resultCd as string,
-        json
-      );
+  protected unwrap(response: { status: number; body: string; json: Record<string, any> }): any {
+    const { status, body, json } = response;
+    if (json.resultCd && json.resultCd !== '000') {
+      throw new ApiException(json.resultMsg ?? 'KRA business error', 400, json.resultCd, json);
     }
 
-    // Handle HTTP success
-    if (status >= 200 && status < 300) {
-      return json;
-    }
+    if (status >= 200 && status < 300) return json;
+    if (status === 401) throw new AuthenticationException('Unauthorized: Invalid or expired token', 401);
 
-    // Handle authentication errors
-    if (status === 401) {
-      throw new AuthenticationException('Unauthorized: Invalid or expired token', 401);
-    }
-
-    // Generic HTTP errors
-    const faultMsg = (json.fault as Record<string, string>)?.faultstring;
-    const message = faultMsg || rawBody || `HTTP ${status} error`;
-    throw new ApiException(message.trim(), status);
-  }
-
-  // Public convenience methods
-  protected get(endpointKey: string, query?: Record<string, unknown>): Promise<unknown> {
-    return this.request('GET', endpointKey, query);
-  }
-
-  protected post(endpointKey: string, body?: Record<string, unknown>): Promise<unknown> {
-    return this.request('POST', endpointKey, body);
+    const faultMsg = json.fault?.faultstring;
+    throw new ApiException(faultMsg ?? body ?? `HTTP ${status} error`, status);
   }
 }
