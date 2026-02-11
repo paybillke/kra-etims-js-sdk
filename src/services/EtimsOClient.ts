@@ -1,12 +1,12 @@
-import { BaseClient } from './BaseClient';
+import { BaseOClient } from './BaseOClient';
 import { Validator } from './Validator';
-import { type KraEtimsConfig } from '../config';
-import { AuthClient } from './AuthClient';
+import { type OscuConfig } from '../config';
+import { AuthOClient } from './AuthOClient';
 
-export class EtimsClient extends BaseClient {
+export class EtimsOClient extends BaseOClient {
   protected validator: Validator;
 
-  constructor(config: KraEtimsConfig, auth: AuthClient) {
+  constructor(config: OscuConfig, auth: AuthOClient) {
     super(config, auth);
     this.validator = new Validator();
   }
@@ -33,7 +33,7 @@ export class EtimsClient extends BaseClient {
   // CUSTOMER / BRANCH
   // -----------------------------
   async selectCustomer(data: Record<string, unknown>): Promise<unknown> {
-    return this.post('selectCustomer', this.validate(data, 'custSearchReq'));
+    return this.post('selectCustomer', this.validate(data, 'selectCustomer'));
   }
 
   async selectBranches(data: Record<string, unknown>): Promise<unknown> {
@@ -41,15 +41,15 @@ export class EtimsClient extends BaseClient {
   }
 
   async saveBranchCustomer(data: Record<string, unknown>): Promise<unknown> {
-    return this.post('saveBhfCustomer', this.validate(data, 'branchCustomer'));
+    return this.post('saveBhfCustomer', this.validate(data, 'saveBhfCustomer'));
   }
 
   async saveBranchUser(data: Record<string, unknown>): Promise<unknown> {
-    return this.post('saveBhfUser', this.validate(data, 'branchUser'));
+    return this.post('saveBhfUser', this.validate(data, 'saveBhfUser'));
   }
 
   async saveBranchInsurance(data: Record<string, unknown>): Promise<unknown> {
-    return this.post('saveBhfInsurance', this.validate(data, 'branchInsurance'));
+    return this.post('saveBhfInsurance', this.validate(data, 'saveBhfInsurance'));
   }
 
   // -----------------------------
@@ -68,7 +68,7 @@ export class EtimsClient extends BaseClient {
   }
 
   async saveItemComposition(data: Record<string, unknown>): Promise<unknown> {
-    return this.post('SaveItemComposition', this.validate(data, 'itemComposition'));
+    return this.post('saveItemComposition', this.validate(data, 'saveItemComposition'));
   }
 
   // -----------------------------
@@ -79,7 +79,7 @@ export class EtimsClient extends BaseClient {
   }
 
   async updateImportedItem(data: Record<string, unknown>): Promise<unknown> {
-    return this.post('updateImportItem', this.validate(data, 'importItemUpdate'));
+    return this.post('updateImportItem', this.validate(data, 'updateImportItem'));
   }
 
   // -----------------------------
@@ -94,7 +94,7 @@ export class EtimsClient extends BaseClient {
   }
 
   async saveSalesTransaction(data: Record<string, unknown>): Promise<unknown> {
-    return this.post('TrnsSalesSaveWrReq', this.validate(data, 'lastReqOnly'));
+    return this.post('saveTrnsSalesOsdc', this.validate(data, 'saveTrnsSalesOsdc'));
   }
 
   // -----------------------------
@@ -105,11 +105,11 @@ export class EtimsClient extends BaseClient {
   }
 
   async saveStockIO(data: Record<string, unknown>): Promise<unknown> {
-    return this.post('insertStockIO', this.validate(data, 'saveStockIO'));
+    return this.post('insertStockIO', this.validate(data, 'insertStockIO'));
   }
 
   async saveStockMaster(data: Record<string, unknown>): Promise<unknown> {
-    return this.post('saveStockMaster', this.validate(data, 'stockMaster'));
+    return this.post('saveStockMaster', this.validate(data, 'saveStockMaster'));
   }
 
   // -----------------------------

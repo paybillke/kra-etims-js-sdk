@@ -4,10 +4,10 @@ export { AuthenticationException } from './exceptions/AuthenticationException';
 export { ValidationException } from './exceptions/ValidationException';
 
 // Core Services
-export { AuthClient } from './services/AuthClient';
-export { BaseClient } from './services/BaseClient';
-export { EtimsClient } from './services/EtimsClient';
+export { AuthOClient } from './services/AuthOClient';
+export { BaseOClient } from './services/BaseOClient';
+export { EtimsOClient } from './services/EtimsOClient';
 export { Validator } from './services/Validator';
 
 // Types
-export type { KraEtimsConfig } from './config';
+export type { OscuConfig } from './config';

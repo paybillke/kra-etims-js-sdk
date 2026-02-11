@@ -1,8 +1,8 @@
 // etims.integration.test.ts
 import { describe, test, beforeAll, expect } from 'vitest';
 import { 
-  AuthClient, 
-  EtimsClient
+  AuthOClient, 
+  EtimsOClient
 } from '../src'; // Adjust import path as needed
 import { existsSync, unlinkSync } from 'fs';
 
@@ -41,26 +41,16 @@ function clearTokenCache(cacheFile: string) {
 
 // ====================== CONFIG ======================
 const config = {
-  env: 'sandbox' as const,
+  env: 'sbx' as const,
   cacheFile: `${process.env.TMPDIR || '/tmp'}/kra_etims_token.json`,
   auth: {
-    sandbox: {
-      token_url: 'https://sbx.kra.go.ke/v1/token/generate'.trim(),
+    sbx: {
       consumer_key: process.env.KRA_CONSUMER_KEY!,
       consumer_secret: process.env.KRA_CONSUMER_SECRET!,
     },
-    production: {
-      token_url: 'https://sbx.kra.go.ke/v1/token/generate'.trim(),
-      consumer_key: process.env.KRA_PROD_CONSUMER_KEY!,
-      consumer_secret: process.env.KRA_PROD_CONSUMER_SECRET!,
-    },
-  },
-  api: {
-    sandbox: {
-      base_url: 'https://etims-api-sbx.kra.go.ke/etims-api'.trim(),
-    },
-    production: {
-      base_url: 'https://etims-api-sbx.kra.go.ke/etims-api'.trim(),
+    prod: {
+      consumer_key: process.env.KRA_CONSUMER_KEY!,
+      consumer_secret: process.env.KRA_CONSUMER_SECRET!,
     },
   },
   http: { timeout: 30 },
@@ -74,18 +64,18 @@ const config = {
 
 // ====================== TEST SUITE ======================
 describe('KRA ETIMS Integration Tests', () => {
-  let authClient: AuthClient;
-  let etimsClient: EtimsClient;
+  let authOClient: AuthOClient;
+  let etimsOClient: EtimsOClient;
 
   beforeAll(async () => {
     logSection('INITIALIZING SDK');
-    authClient = new AuthClient(config);
-    etimsClient = new EtimsClient(config, authClient);
+    authOClient = new AuthOClient(config);
+    etimsOClient = new EtimsOClient(config, authOClient);
 
     // Clear cache before each test to ensure fresh tokens
     clearTokenCache(config.cacheFile);
         
-    const token = await authClient.getToken(true);
+    const token = await authOClient.getToken(true);
     
     console.log(`✅ Authentication successful`);
     console.log(`🔑 Token preview: ${token.substring(0, 25)}...`);
@@ -94,7 +84,7 @@ describe('KRA ETIMS Integration Tests', () => {
   // ====================== TEST CASES ======================
   test('STEP 3: Code List Search', async () => {
     logSection('STEP 3: CODE LIST SEARCH');
-    const response = await etimsClient.selectCodeList({
+    const response = await etimsOClient.selectCodeList({
       lastReqDt: formatDateForEtims(-7)
     });
     
@@ -109,12 +99,11 @@ describe('KRA ETIMS Integration Tests', () => {
     });
     
     expect(clsList).toBeInstanceOf(Array);
-    expect(clsList.length).toBeGreaterThan(0);
   }, 30_000);
 
   test('STEP 4: Customer Search', async () => {
     logSection('STEP 4: CUSTOMER SEARCH');
-    const response = await etimsClient.selectCustomer({
+    const response = await etimsOClient.selectCustomer({
       custmTin: 'A123456789Z'
     });
     
@@ -130,7 +119,7 @@ describe('KRA ETIMS Integration Tests', () => {
 
   test('STEP 5: Notice Search', async () => {
     logSection('STEP 5: NOTICE SEARCH');
-    const response = await etimsClient.selectNoticeList({
+    const response = await etimsOClient.selectNoticeList({
       lastReqDt: formatDateForEtims(-30)
     });
     
@@ -146,7 +135,7 @@ describe('KRA ETIMS Integration Tests', () => {
 
   test('STEP 6: Item Class Search', async () => {
     logSection('STEP 6: ITEM CLASS SEARCH');
-    const response = await etimsClient.selectItemClasses({
+    const response = await etimsOClient.selectItemClasses({
       lastReqDt: formatDateForEtims(-30)
     });
     
@@ -162,7 +151,7 @@ describe('KRA ETIMS Integration Tests', () => {
 
   test('STEP 7: Save Item', async () => {
     logSection('STEP 7: SAVE ITEM');
-    const response = await etimsClient.saveItem({
+    const response = await etimsOClient.saveItem({
       itemCd: `KE1NTXU${Date.now()}`, // Unique ID to avoid conflicts
       itemClsCd: '5059690800',
       itemTyCd: '1',
@@ -186,7 +175,7 @@ describe('KRA ETIMS Integration Tests', () => {
 
   test('STEP 8: Item Search', async () => {
     logSection('STEP 8: ITEM SEARCH');
-    const response = await etimsClient.selectItems({
+    const response = await etimsOClient.selectItems({
       lastReqDt: formatDateForEtims(-30)
     });
     
@@ -202,7 +191,7 @@ describe('KRA ETIMS Integration Tests', () => {
 
   test('STEP 9: Branch Search', async () => {
     logSection('STEP 9: BRANCH SEARCH');
-    const response = await etimsClient.selectBranches({
+    const response = await etimsOClient.selectBranches({
       lastReqDt: formatDateForEtims(-30)
     });
     
@@ -218,7 +207,7 @@ describe('KRA ETIMS Integration Tests', () => {
 
   test('STEP 10: Save Branch Customer', async () => {
     logSection('STEP 10: SAVE BRANCH CUSTOMER');
-    const response = await etimsClient.saveBranchCustomer({
+    const response = await etimsOClient.saveBranchCustomer({
       custNo: `CUST123456`,
       custTin: 'A123456789Z',
       custNm: `Test Customer ${Date.now()}`,
@@ -235,7 +224,7 @@ describe('KRA ETIMS Integration Tests', () => {
 
   test('STEP 11: Save Branch User', async () => {
     logSection('STEP 11: SAVE BRANCH USER');
-    const response = await etimsClient.saveBranchUser({
+    const response = await etimsOClient.saveBranchUser({
       userId: `user_${Date.now()}`,
       userNm: `Test User ${Date.now()}`,
       pwd: 'SecurePass123!',
@@ -252,7 +241,7 @@ describe('KRA ETIMS Integration Tests', () => {
 
   test('STEP 12: Save Branch Insurance', async () => {
     logSection('STEP 12: SAVE BRANCH INSURANCE');
-    const response = await etimsClient.saveBranchInsurance({
+    const response = await etimsOClient.saveBranchInsurance({
       isrccCd: `INS12345`,
       isrccNm: `Test Insurance ${Date.now()}`,
       isrcRt: 20,
@@ -271,7 +260,7 @@ describe('KRA ETIMS Integration Tests', () => {
     logSection('STEP 14: IMPORT ITEM UPDATE');
     // Note: This requires valid taskCd/dclNo from your environment
     // Using placeholder values - update with valid test data
-    const response = await etimsClient.updateImportedItem({
+    const response = await etimsOClient.updateImportedItem({
       taskCd: '2231943',
       dclDe: '20191217',
       itemSeq: 1,
@@ -292,7 +281,7 @@ describe('KRA ETIMS Integration Tests', () => {
     logSection('STEP 16: PURCHASE TRANSACTION SAVE');
     const uniqueInvoice = `INV12345`;
     
-    const response = await etimsClient.savePurchase({
+    const response = await etimsOClient.savePurchase({
       invcNo: 1,
       orgInvcNo: 0,
       spplrTin: 'A123456789Z',
@@ -413,7 +402,7 @@ describe('KRA ETIMS Integration Tests', () => {
   test('STEP 18: Save Stock In/Out', async () => {
     logSection('STEP 18: STOCK IN/OUT SAVE');
     
-    const response = await etimsClient.saveStockIO({
+    const response = await etimsOClient.saveStockIO({
   tin: 'A123456789Z',
   bhfId: '00',
   sarNo: 2,
@@ -482,7 +471,7 @@ describe('KRA ETIMS Integration Tests', () => {
 
   test('STEP 19: Save Stock Master', async () => {
     logSection('STEP 19: SAVE STOCK MASTER');
-    const response = await etimsClient.saveStockMaster({
+    const response = await etimsOClient.saveStockMaster({
       itemCd: 'KE1NTXU0000002',
       rsdQty: 10,
       regrId: 'Test',

@@ -1,13 +1,13 @@
 import axios from 'axios';
 import { TokenCacheManager, type TokenCache } from '../utils/cache';
-import { type KraEtimsConfig } from '../config';
+import { type OscuConfig } from '../config';
 import { ApiException } from '../exceptions/ApiException';
 
-export class AuthClient {
+export class AuthOClient {
   private cacheManager: TokenCacheManager;
   private readonly timeout: number;
 
-  constructor(private config: KraEtimsConfig) {
+  constructor(private config: OscuConfig) {
     this.cacheManager = new TokenCacheManager(config.cache_file);
     this.timeout = (config.http?.timeout ?? 15) * 1000; // Convert to ms
   }
@@ -48,9 +48,15 @@ export class AuthClient {
       `${envConfig.consumer_key}:${envConfig.consumer_secret}`
     ).toString('base64');
 
+    const token_url = 'https://sbx.kra.go.ke/v1/token/generate'.trim();
+
+    if(this.config.env == 'sbx') {
+      'https://sbx.kra.go.ke/v1/token/generate'.trim();
+    } 
+
     try {
       const response = await axios.get(
-        `${envConfig.token_url.trim().replace(/\/+$/, '')}?grant_type=client_credentials`,
+        `${token_url.trim().replace(/\/+$/, '')}?grant_type=client_credentials`,
         {
           headers: {
             'Authorization': `Basic ${authHeader}`,

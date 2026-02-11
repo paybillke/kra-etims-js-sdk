@@ -1,14 +1,16 @@
 {
   "name": "@paybilldev/kra-etims-sdk",
-  "version": "1.0.0",
-  "description": "A production-ready Node SDK for integrating with the Kenya Revenue Authority (KRA) eTIMS OSCU (Online Sales Control Unit) API. Built to match the official Postman collection specifications with strict header compliance, token management, and comprehensive validation.",
+  "version": "1.0.3",
+  "description": "A production-ready Node SDK for integrating with the Kenya Revenue Authority (KRA) eTIMS OSCU (Online Sales Control Unit) and VSCU (Virtual Sales Control Unit) API. Built to match the official Postman collection specifications with strict header compliance, token management, and comprehensive validation.",
   "license": "MIT",
   "main": "dist/index.js",
   "types": "types/index.d.ts",
   "keywords": [
     "kra",
     "etims",
-    "sdk"
+    "sdk",
+    "vscu",
+    "oscu"
   ],
   "author": {
     "name": "Paybill Kenya Limited",

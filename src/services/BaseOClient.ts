@@ -1,10 +1,10 @@
 import axios, { type AxiosResponse } from 'axios';
-import { AuthClient } from './AuthClient';
-import { type KraEtimsConfig } from '../config';
+import { AuthOClient } from './AuthOClient';
+import { type OscuConfig } from '../config';
 import { ApiException } from '../exceptions/ApiException';
 import { AuthenticationException } from '../exceptions/AuthenticationException';
 
-export abstract class BaseClient {
+export abstract class BaseOClient {
   private static readonly endpoints: Record<string, string> = {
     selectInitOsdcInfo: '/selectInitOsdcInfo',
     selectCodeList: '/selectCodeList',
@@ -13,14 +13,14 @@ export abstract class BaseClient {
     selectItemClsList: '/selectItemClsList',
     selectItemList: '/selectItemList',
     saveItem: '/saveItem',
-    SaveItemComposition: '/saveItemComposition',
+    saveItemComposition: '/saveItemComposition',
     selectBhfList: '/selectBhfList',
     saveBhfCustomer: '/saveBhfCustomer',
     saveBhfUser: '/saveBhfUser',
     saveBhfInsurance: '/saveBhfInsurance',
     selectImportItemList: '/selectImportItemList',
     updateImportItem: '/updateImportItem',
-    TrnsSalesSaveWrReq: '/saveTrnsSalesOsdc',
+    saveTrnsSalesOsdc: '/saveTrnsSalesOsdc',
     selectTrnsPurchaseSalesList: '/selectTrnsPurchaseSalesList',
     insertTrnsPurchase: '/insertTrnsPurchase',
     selectStockMoveList: '/selectStockMoveList',
@@ -29,12 +29,16 @@ export abstract class BaseClient {
   };
 
   constructor(
-    protected config: KraEtimsConfig,
-    protected auth: AuthClient
+    protected config: OscuConfig,
+    protected auth: AuthOClient
   ) {}
 
   protected baseUrl(): string {
-    return this.config.api[this.config.env].base_url.replace(/\/+$/, '');
+    if(this.config.env == 'sbx') {
+      return 'https://etims-api-sbx.kra.go.ke/etims-api'.trim().replace(/\/+$/, '');
+    } else {
+      return 'https://etims-api-sbx.kra.go.ke/etims-api'.trim().replace(/\/+$/, '');
+    }
   }
 
   protected timeout(): number {
@@ -48,7 +52,7 @@ export abstract class BaseClient {
         500
       );
     }
-    const ep = (BaseClient.endpoints as Record<string, string>)[key];
+    const ep = (BaseOClient.endpoints as Record<string, string>)[key];
     if (!ep) throw new ApiException(`Endpoint [${key}] not configured`, 500);
     return ep;
   }
@@ -143,15 +147,57 @@ export abstract class BaseClient {
   }
 
   protected unwrap(response: { status: number; body: string; json: Record<string, any> }): any {
-    const { status, body, json } = response;
-    if (json.resultCd && json.resultCd !== '000') {
-      throw new ApiException(json.resultMsg ?? 'KRA business error', 400, json.resultCd, json);
+    const { status, json } = response;
+
+    const resultCd = json?.resultCd;
+    const resultMsg = json?.resultMsg ?? 'Unknown API response';
+
+    // HTTP-level handling
+    if (status === 401) {
+      throw new AuthenticationException('Unauthorized: Invalid or expired token', 401);
     }
 
-    if (status >= 200 && status < 300) return json;
-    if (status === 401) throw new AuthenticationException('Unauthorized: Invalid or expired token', 401);
+    if (status < 200 || status >= 300) {
+      throw new ApiException(`HTTP Error (${status}): ${resultMsg}`, status);
+    }
 
-    const faultMsg = json.fault?.faultstring;
-    throw new ApiException(faultMsg ?? body ?? `HTTP ${status} error`, status);
+    // Business-level handling
+    if (!resultCd) {
+      return json; // Some endpoints may not return resultCd
+    }
+
+    switch (resultCd) {
+      case '000':
+      case '001':
+        return json; // ✅ Success
+
+      default:
+        // Categorize errors
+        if (resultCd >= '891' && resultCd <= '899') {
+          throw new ApiException(
+            `Client Error (${resultCd}): ${resultMsg}`,
+            400,
+            resultCd,
+            json
+          );
+        }
+
+        if (resultCd >= '900') {
+          throw new ApiException(
+            `Server Error (${resultCd}): ${resultMsg}`,
+            500,
+            resultCd,
+            json
+          );
+        }
+
+        // Fallback
+        throw new ApiException(
+          `Business Error (${resultCd}): ${resultMsg}`,
+          400,
+          resultCd,
+          json
+        );
+    }
   }
 }
