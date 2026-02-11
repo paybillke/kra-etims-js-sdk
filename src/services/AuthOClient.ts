@@ -48,7 +48,7 @@ export class AuthOClient {
       `${envConfig.consumer_key}:${envConfig.consumer_secret}`
     ).toString('base64');
 
-    const token_url = 'https://api.developer.go.ke'.trim();
+    const token_url = 'https://api.kra.go.ke/v1/token/generate'.trim();
 
     if(this.config.env == 'sbx') {
       'https://sbx.kra.go.ke/v1/token/generate'.trim();
